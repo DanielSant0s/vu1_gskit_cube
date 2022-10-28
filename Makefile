@@ -8,7 +8,7 @@
 
 EE_BIN = vu1.elf
 EE_OBJS = draw_3D.o main.o
-EE_LIBS = -L$(PS2DEV)/gsKit/lib/ -lmath3d -lpacket2 -ldmakit -lgskit
+EE_LIBS = -L$(PS2DEV)/gsKit/lib/ -lmath3d -ldmakit -lgskit
 EE_INCS += -I$(PS2DEV)/gsKit/include
 
 EE_DVP = dvp-as
