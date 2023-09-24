@@ -7,7 +7,7 @@
 # Review ps2sdk README & LICENSE files for further details.
 
 EE_BIN = vu1.elf
-EE_OBJS = draw_3D.o main.o
+EE_OBJS = draw_3D.o main.o vif.o
 EE_LIBS = -L$(PS2DEV)/gsKit/lib/ -lmath3d -ldmakit -lgskit
 EE_INCS += -I$(PS2DEV)/gsKit/include
 
