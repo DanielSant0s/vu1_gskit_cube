@@ -3,6 +3,7 @@
 
 #include <gsKit.h>
 #include <dmaKit.h>
+#include <stdint.h>
 #include <kernel.h>
 #include <malloc.h>
 #include <tamtypes.h>
@@ -42,6 +43,9 @@
 #define VIF_DIRECT 80
 #define VIF_DIRECTHL 81
 
+#define vifRegisterProgram(NAME)  extern u32 NAME ## _CodeStart __attribute__((section(".vudata"))); \
+								  extern u32 NAME ## _CodeEnd __attribute__((section(".vudata")));
+
 #define VIF_CODE(_immediate, _num, _cmd, _irq) ((u32)(_immediate) | ((u32)(_num) << 16) | ((u32)(_cmd) << 24) | ((u32)(_irq) << 31))
 
 #define DRAW_STQ2_REGLIST \
@@ -74,5 +78,17 @@ void vifSendPacket(void* packet, u32 vif_channel);
 void *vifCreatePacket(u32 size);
 
 void vifDestroyPacket(void* packet);
+
+int getbufferDepth(GSGLOBAL* gsGlobal);
+
+void *vifAddScreenSizeData(void* packet, GSGLOBAL* gsGlobal);
+
+void *vifAddFloat(void* packet, float f);
+
+void *vifAddUInt(void* packet, uint32_t n);
+
+void *vifAddGifTag(void* packet, uint64_t tag, uint64_t data);
+
+void *vifAddColorData(void* packet, uint32_t r, uint32_t g, uint32_t b, uint32_t a);
 
 #endif

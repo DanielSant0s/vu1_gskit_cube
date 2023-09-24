@@ -2,6 +2,7 @@
     "files.associations": {
         "stdio.h": "c",
         "malloc.h": "c",
-        "vif.h": "c"
+        "vif.h": "c",
+        "time.h": "c"
     }
 }

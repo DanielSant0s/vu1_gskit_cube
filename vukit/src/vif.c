@@ -14,6 +14,66 @@ void vifDestroyPacket(void* packet) {
     free(packet);
 }
 
+int getbufferDepth(GSGLOBAL* gsGlobal) {
+	switch(gsGlobal->PSMZ){
+		case GS_PSMZ_32:
+			return 32;
+		case GS_PSMZ_24:
+			return 24;
+		case GS_PSMZ_16:
+		case GS_PSMZ_16S:
+			return 16;
+		default:
+			return -1;
+	}
+}
+
+void *vifAddScreenSizeData(void* packet, GSGLOBAL* gsGlobal) {
+	float* p_data = packet;
+
+	*p_data++ = 2048.0f+gsGlobal->Width/2; // width
+	*p_data++ = 2048.0f+gsGlobal->Height/2; // height
+	*p_data++ = ((float)0xFFFFFF) / (float)getbufferDepth(gsGlobal); // depth
+
+	return p_data;
+}
+
+void *vifAddFloat(void* packet, float f) {
+	float* p_data = packet;
+
+	*p_data++ = f;
+
+	return p_data;
+}
+
+void *vifAddUInt(void* packet, uint32_t n) {
+	uint32_t* p_data = packet;
+
+	*p_data++ = n;
+
+	return p_data;
+}
+
+void *vifAddGifTag(void* packet, uint64_t tag, uint64_t data) {
+	u64* p_data = packet;
+
+	*p_data++ = data;
+	*p_data++ = tag;
+
+	return p_data;
+}
+
+void *vifAddColorData(void* packet, uint32_t r, uint32_t g, uint32_t b, uint32_t a) {
+	uint32_t* p_data = packet;
+
+	*p_data++ = r;
+	*p_data++ = g;
+	*p_data++ = b;
+	*p_data++ = a;
+
+	return p_data;
+}
+
 static inline u32 get_packet_size_for_program(u32 *start, u32 *end)
 {
     // Count instructions

@@ -15,12 +15,14 @@
 #include <math3d.h>
 #include <time.h>
 #include <stdio.h>
-#include "cube.c"
-#include "mesh_data.c"
-#include "vif.h"
+#include <vif.h>
 
-extern u32 VU1Draw3D_CodeStart __attribute__((section(".vudata")));
-extern u32 VU1Draw3D_CodeEnd __attribute__((section(".vudata")));
+#include "mesh_data.c"
+
+vifRegisterProgram(DynPipVU1_C);
+vifRegisterProgram(DynPipVU1_D);
+vifRegisterProgram(DynPipVU1_TC);
+vifRegisterProgram(DynPipVU1_TD);
 
 VECTOR object_position = { 0.00f, 0.00f, 0.00f, 1.00f };
 VECTOR object_rotation = { 0.00f, 0.00f, 0.00f, 1.00f };
@@ -38,7 +40,7 @@ u64 *cube_packet;
 
 u8 context = 0;
 
-VECTOR *c_verts __attribute__((aligned(128))), *c_sts __attribute__((aligned(128)));
+VECTOR *c_verts __attribute__((aligned(128))), *c_colours __attribute__((aligned(128)));
 
 static inline u32 lzw(u32 val)
 {
@@ -58,45 +60,36 @@ static inline void gsKit_set_tw_th(const GSTEXTURE *Texture, int *tw, int *th)
 		(*th)++;
 }
 
-/** Calculate packet for cube data */
 void calculate_cube(GSGLOBAL* gsGlobal, GSTEXTURE* Texture)
 {
-	float fX = 2048.0f+gsGlobal->Width/2;
-	float fY = 2048.0f+gsGlobal->Height/2;
-	float fZ = ((float)0xFFFFFF) / 32.0F;
-
+	u64 tmp;
 	u64* p_data = cube_packet;
 
-	*p_data++ = (*(u32*)(&fX) | (u64)*(u32*)(&fY) << 32);
-	*p_data++ = (*(u32*)(&fZ) | (u64)faces_count << 32);
+	p_data = vifAddScreenSizeData(p_data, gsGlobal);
+	p_data = vifAddUInt(p_data, points_count);
 
-	*p_data++ = GIF_TAG(1, 0, 0, 0, 0, 1);
-	*p_data++ = GIF_AD;
-
-	*p_data++ = GS_SETREG_TEX1(1, 0, 0, 0, 0, 0, 0);
-	*p_data++ = GS_TEX1_1;
+	tmp = GIF_TAG(1, 0, 0, 0, 0, 1);
+	p_data = vifAddGifTag(p_data, GIF_AD, tmp);
+	p_data = vifAddGifTag(p_data, GS_TEX1_1, GS_SETREG_TEX1(1, 0, 0, 0, 0, 0, 0));
 
 	int tw, th;
 	gsKit_set_tw_th(Texture, &tw, &th);
 
-	*p_data++ = GS_SETREG_TEX0(
+	p_data = vifAddGifTag(p_data, GS_TEX0_1, GS_SETREG_TEX0(
             Texture->Vram/256, Texture->TBW, Texture->PSM,
             tw, th, gsGlobal->PrimAlphaEnable, 0,
-    		0, 0, 0, 0, GS_CLUT_STOREMODE_NOLOAD);
-	*p_data++ = GS_TEX0_1;
+    		0, 0, 0, 0, GS_CLUT_STOREMODE_NOLOAD));
 
-	*p_data++ = VU_GS_GIFTAG(faces_count, 1, 1,
-    	VU_GS_PRIM(GS_PRIM_PRIM_TRIANGLE, 1, 1, gsGlobal->PrimFogEnable, 
-		0, gsGlobal->PrimAAEnable, 0, 0, 0),
-        0, 3);
+	p_data = vifAddGifTag(p_data, DRAW_STQ2_REGLIST, VU_GS_GIFTAG(
+			points_count, 1, 1,
+    		VU_GS_PRIM(GS_PRIM_PRIM_TRIANGLE, 1, 1, gsGlobal->PrimFogEnable, 
+			0, gsGlobal->PrimAAEnable, 0, 0, 0),
+        	0, 3));
 
-	*p_data++ = DRAW_STQ2_REGLIST;
-
-	*p_data++ = (128 | (u64)128 << 32);
-	*p_data++ = (128 | (u64)128 << 32);	
+	p_data = vifAddColorData(p_data, 128, 128, 128, 128);
 }
+/*
 
-/** Calculate cube position and add packet with cube data */
 void draw_cube()
 {
 	create_local_world(local_world, object_position, object_rotation);
@@ -122,7 +115,7 @@ void draw_cube()
 	vif_added_bytes += faces_count; // one VECTOR is size of qword
 
 	// Add sts
-	curr_vif_packet = vu_add_unpack_data(curr_vif_packet, vif_added_bytes, c_sts, faces_count, 1);
+	curr_vif_packet = vu_add_unpack_data(curr_vif_packet, vif_added_bytes, c_colours, faces_count, 1);
 	vif_added_bytes += faces_count;
 
 	*curr_vif_packet++ = DMA_TAG(0, 0, DMA_CNT, 0, 0, 0);
@@ -136,7 +129,7 @@ void draw_cube()
 	// Switch packet, so we can proceed during DMA transfer
 	context = !context;
 }
-
+*/
 GSGLOBAL* init_graphics()
 {
 	GSGLOBAL* gsGlobal = gsKit_init_global();
@@ -167,39 +160,24 @@ GSGLOBAL* init_graphics()
 
 }
 
-/** Send texture data to GS. */
-void send_texture(GSGLOBAL* gsGlobal, GSTEXTURE* Texture)
-{
-	Texture->Width = 128;
-	Texture->Height = 128;
-	Texture->PSM = GS_PSM_CT24;
-	Texture->Vram = gsKit_vram_alloc(gsGlobal, gsKit_texture_size(128, 128, GS_PSM_CT24), GSKIT_ALLOC_USERBUFFER);
-	Texture->Mem = (u32*)cube;
-
-	gsKit_texture_upload(gsGlobal, Texture);
-}
-
 void render(GSGLOBAL* gsGlobal, GSTEXTURE* Texture)
 {
-	/** 
-	 * Allocate some space for object position calculating. 
-	 * c_ prefix = calc_
-	 */
-	c_verts = (VECTOR *)memalign(128, sizeof(VECTOR) * faces_count);
-	c_sts = (VECTOR *)memalign(128, sizeof(VECTOR) * faces_count);
+
+	c_verts = (VECTOR *)memalign(128, sizeof(VECTOR) * points_count);
+	c_colours = (VECTOR *)memalign(128, sizeof(VECTOR) * points_count);
 
 	VECTOR* tmp1 = c_verts;
-	VECTOR* tmp2 = c_sts;
+	VECTOR* tmp2 = c_colours;
 
-	for (int i = 0; i < faces_count; i++, tmp1++, tmp2++)
+	for (int i = 0; i < points_count; i++, tmp1++, tmp2++)
 	{
-		memcpy(tmp1, &vertices[faces[i]], sizeof(VECTOR));
-		memcpy(tmp2, &sts[faces[i]], sizeof(VECTOR));
+		memcpy(tmp1, &vertices[points[i]], sizeof(VECTOR));
+		memcpy(tmp2, &colours[points[i]], sizeof(VECTOR));
 	}
 
 	// Create the view_screen matrix.
 	create_view_screen(view_screen, 4/3, -3.00f, 3.00f, -3.00f, 3.00f, 1.00f, 2000.00f);
-	calculate_cube(gsGlobal, Texture);
+	//calculate_cube(gsGlobal, Texture);
 
 	if (gsGlobal->ZBuffering == GS_SETTING_ON)
 		gsKit_set_test(gsGlobal, GS_ZTEST_ON);
@@ -213,7 +191,7 @@ void render(GSGLOBAL* gsGlobal, GSTEXTURE* Texture)
 
 		gsKit_clear(gsGlobal, GS_SETREG_RGBAQ(0x40,0x40,0x40,0x80,0x00));
 
-		draw_cube();
+		//draw_cube();
 
 		gsKit_sync_flip(gsGlobal);
 		gsKit_queue_exec(gsGlobal);
@@ -227,16 +205,13 @@ int main(int argc, char *argv[])
 	vif_packets[0] = vifCreatePacket(6);
 	vif_packets[1] = vifCreatePacket(6);
 
-	vu1_upload_micro_program(&VU1Draw3D_CodeStart, &VU1Draw3D_CodeEnd);
+	vu1_upload_micro_program(&DynPipVU1_C_CodeStart, &DynPipVU1_C_CodeEnd);
 	vu1_set_double_buffer_settings();
 
 	GSTEXTURE gsTexture;
 
 	// Init the GS, framebuffer, zbuffer, and texture buffer.
 	GSGLOBAL* gsGlobal = init_graphics();
-
-	// Load the texture into vram.
-	send_texture(gsGlobal, &gsTexture);
 
 	// Render textured cube
 	render(gsGlobal, &gsTexture);
