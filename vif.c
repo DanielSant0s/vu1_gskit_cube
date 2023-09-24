@@ -10,6 +10,10 @@ void *vifCreatePacket(u32 size) {
     return memalign(128, size*16);
 }
 
+void vifDestroyPacket(void* packet) {
+    free(packet);
+}
+
 static inline u32 get_packet_size_for_program(u32 *start, u32 *end)
 {
     // Count instructions
@@ -50,7 +54,7 @@ void vu1_upload_micro_program(u32* start, u32* end)
 	*p_data++ = (VIF_CODE(0, 0, VIF_NOP, 0) | (u64)VIF_CODE(0, 0, VIF_NOP, 0) << 32);
 
     vifSendPacket(p_store, 1);
-	free(p_store);
+	vifDestroyPacket(p_store);
 }
 
 void vu1_set_double_buffer_settings()
@@ -66,5 +70,5 @@ void vu1_set_double_buffer_settings()
 	*p_data++ = (VIF_CODE(0, 0, VIF_NOP, 0) | (u64)VIF_CODE(0, 0, VIF_NOP, 0) << 32);
 
     vifSendPacket(p_store, 1);
-	free(p_store);
+	vifDestroyPacket(p_store);
 }

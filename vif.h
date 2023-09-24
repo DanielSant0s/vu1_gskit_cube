@@ -73,4 +73,6 @@ void vifSendPacket(void* packet, u32 vif_channel);
 
 void *vifCreatePacket(u32 size);
 
+void vifDestroyPacket(void* packet);
+
 #endif

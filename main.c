@@ -223,7 +223,7 @@ void render(GSGLOBAL* gsGlobal, GSTEXTURE* Texture)
 int main(int argc, char *argv[])
 {
 	// Initialize vif packets
-	cube_packet = vifCreatePacket(6);
+	cube_packet =    vifCreatePacket(6);
 	vif_packets[0] = vifCreatePacket(6);
 	vif_packets[1] = vifCreatePacket(6);
 
@@ -241,9 +241,9 @@ int main(int argc, char *argv[])
 	// Render textured cube
 	render(gsGlobal, &gsTexture);
 
-	free(vif_packets[0]);
-	free(vif_packets[1]);
-	free(cube_packet);
+	vifDestroyPacket(vif_packets[0]);
+	vifDestroyPacket(vif_packets[1]);
+	vifDestroyPacket(cube_packet);
 
 	// Sleep
 	SleepThread();
