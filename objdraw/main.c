@@ -34,11 +34,14 @@ VECTOR camera_rotation = { 0.00f, 0.00f,   0.00f, 1.00f };
 
 MATRIX local_world, world_view, view_screen, local_screen;
 
-u64* vif_packets[2] __attribute__((aligned(64)));
-u64* curr_vif_packet;
+vifPacket* vif_packets[2] __attribute__((aligned(64)));
+vifPacket* curr_vif_packet;
+
+vifPacket* staticDataPacket;
+vifPacket* objectDataPacket;
 
 /** Cube data */
-u64 *cube_packet;
+vifPacket *cube_packet;
 
 u8 context = 0;
 
@@ -61,86 +64,78 @@ static inline void gsKit_set_tw_th(const GSTEXTURE *Texture, int *tw, int *th)
 	if(Texture->Height > (1<<*th))
 		(*th)++;
 }
-
 void calculate_cube(GSGLOBAL* gsGlobal, GSTEXTURE* Texture)
 {
 	u64 tmp;
-	u64* p_data = cube_packet;
 
-	p_data = vifAddScreenSizeData(p_data, gsGlobal);
-	p_data = vifAddUInt(p_data, points_count);
+	vifAddScreenSizeData(cube_packet, gsGlobal);
+	vifAddUInt(cube_packet, faces_count);
 
 	tmp = GIF_TAG(1, 0, 0, 0, 0, 1);
-	p_data = vifAddGifTag(p_data, GIF_AD, tmp);
-	p_data = vifAddGifTag(p_data, GS_TEX1_1, GS_SETREG_TEX1(1, 0, 0, 0, 0, 0, 0));
+	vifAddGifTag(cube_packet, GIF_AD, tmp);
+	vifAddGifTag(cube_packet, GS_TEX1_1, GS_SETREG_TEX1(1, 0, 0, 0, 0, 0, 0));
 
 	int tw, th;
 	gsKit_set_tw_th(Texture, &tw, &th);
 
-	p_data = vifAddGifTag(p_data, GS_TEX0_1, GS_SETREG_TEX0(
+	vifAddGifTag(cube_packet, GS_TEX0_1, GS_SETREG_TEX0(
             Texture->Vram/256, Texture->TBW, Texture->PSM,
             tw, th, gsGlobal->PrimAlphaEnable, 0,
     		0, 0, 0, 0, GS_CLUT_STOREMODE_NOLOAD));
 
-	p_data = vifAddGifTag(p_data, DRAW_STQ2_REGLIST, VU_GS_GIFTAG(
-			points_count, 1, 1,
+	vifAddGifTag(cube_packet, DRAW_STQ2_REGLIST, VU_GS_GIFTAG(
+			faces_count, 1, 1,
     		VU_GS_PRIM(GS_PRIM_PRIM_TRIANGLE, 1, 1, gsGlobal->PrimFogEnable, 
 			0, gsGlobal->PrimAAEnable, 0, 0, 0),
         	0, 3));
 
-	p_data = vifAddColorData(p_data, 128, 128, 128, 128);
+	vifAddColorData(cube_packet, 128, 128, 128, 128);
 }
 
-void addObjectData(DynPipBag* bag, M4x4* mvp, RendererCoreTextureBuffers* texBuffers) {
-	u64* p_data = objectDataPacket;
+void addObjectData(/*DynPipBag* bag, RendererCoreTextureBuffers* texBuffers*/) {
+  	vifResetPacket(objectDataPacket);
 
-  	memset(p_data, 0, 16*20); // packet2_reset(p_data, false);
-
-  	p_data = vifAddUnpackData(p_data, VU1_MVP_MATRIX_ADDR, mvp->data, 4, false);
+  	vifAddUnpackData(objectDataPacket, VU1_MVP_MATRIX_ADDR, &local_screen, 4, false);
 
   	if (0/*bag->lighting*/) {
-  	  // p_data = vifAddUnpackData(p_data, VU1_LIGHTS_MATRIX_ADDR, bag->lighting->lightMatrix, 3, false);
+  	  // vifAddUnpackData(objectDataPacket, VU1_LIGHTS_MATRIX_ADDR, bag->lighting->lightMatrix, 3, false);
 
-  	  // p_data = vifAddUnpackData(p_data, VU1_LIGHTS_DIRS_ADDR, bag->lighting->dirLights->getLightDirections(), 3, false);
+  	  // vifAddUnpackData(objectDataPacket, VU1_LIGHTS_DIRS_ADDR, bag->lighting->dirLights->getLightDirections(), 3, false);
 
-  	  // p_data = vifAddUnpackData(p_data, VU1_LIGHTS_COLORS_ADDR, bag->lighting->dirLights->getLightColors(), 4, false);
+  	  // vifAddUnpackData(objectDataPacket, VU1_LIGHTS_COLORS_ADDR, bag->lighting->dirLights->getLightColors(), 4, false);
   	}
 
   	u8 singleColorEnabled = false;
 
   	if (singleColorEnabled)  // Color is placed in 4th slot of VU1_LIGHTS_MATRIX_ADDR
-  		p_data = vifAddUnpackData(p_data, VU1_SINGLE_COLOR_ADDR, 0, 1, false);
+  		vifAddUnpackData(objectDataPacket, VU1_SINGLE_COLOR_ADDR, 0, 1, false);
 
-  	p_data = vifOpenUnpack(p_data, VU1_OPTIONS_ADDR, false);
+  	vifOpenUnpack(objectDataPacket, VU1_OPTIONS_ADDR, false);
   	{
-  	  	p_data = vifAddUInt(p_data, singleColorEnabled);  // Single color enabled.
-  	  	p_data = packet2_add_float(p_data, bag->interpolation);  // Interpolation value
-  	  	p_data = vifAddUInt(p_data, 0);   // not used, padding
-  	  	p_data = vifAddUInt(p_data, 0);   // not used, padding
+  	  	vifAddUInt(objectDataPacket, singleColorEnabled);  // Single color enabled.
+  	  	vifAddFloat(objectDataPacket, 0.0f);  // Interpolation value
+  	  	vifAddUInt(objectDataPacket, 0);   // not used, padding
+  	  	vifAddUInt(objectDataPacket, 0);   // not used, padding
 
-  	  	p_data = vifAddGifTag(p_data, GS_TEX1_1, GS_SETREG_TEX1(1, 0, 0, 0, 0, 0, 0));
+  	  	vifAddGifTag(objectDataPacket, GS_TEX1_1, GS_SETREG_TEX1(1, 0, 0, 0, 0, 0, 0));
 
-  	  	if (bag->info->zTestType == PipelineZTest_AllPass) {
-  	  	  	packet2_add_2x_s64(p_data, GS_SET_TEST(0, 0, 0, 0, 0, 0, 0, ZTEST_METHOD_ALLPASS), GS_REG_TEST);
+  	  	if (0 /*bag->info->zTestType == PipelineZTest_AllPass*/) {
+  	  	  	vifAddGifTag(objectDataPacket, GS_TEST_1, GS_SETREG_TEST(0, 0, 0, 0, 0, 0, 0, 1));
   	  	} else {
-  	  	  	packet2_add_2x_s64( p_data,
-  	  	  	    GS_SET_TEST(DRAW_ENABLE, ATEST_METHOD_NOTEQUAL, 0x00,
-  	  	  	                ATEST_KEEP_FRAMEBUFFER, DRAW_DISABLE, DRAW_DISABLE,
-  	  	  	                DRAW_ENABLE, rendererCore->gs.zBuffer.method),
-  	  	  	    GS_REG_TEST);
+  	  	  	vifAddGifTag(objectDataPacket, GS_TEST_1, GS_SETREG_TEST(1, 7, 0, 2, 0, 0, 1, 2));
   	  	}
 
-  	  	if (texBuffers != nullptr) {
-  	  	  	rendererCore->texture.updateClutBuffer(texBuffers->clut);
+  	  	if (0 /*texBuffers != nullptr*/) {
+  	  	  	// rendererCore->texture.updateClutBuffer(texBuffers->clut);
 
-  	  	  	packet2_utils_gs_add_texbuff_clut(p_data, texBuffers->core, &rendererCore->texture.clut);
+  	  	  	// packet2_utils_gs_add_texbuff_clut(objectDataPacket, texBuffers->core, &rendererCore->texture.clut);
   	  	}
   	}
-  	p_data = vifCloseUnpack(p_data);
+  	vifCloseUnpack(objectDataPacket);
 
-  	p_data = vifAddEndTag(p_data);
+  	vifAddEndTag(objectDataPacket);
 	
-  	vifSendPacket(p_data, 1);
+  	vifSendPacket(objectDataPacket, 1);
 }
 
 /*
@@ -256,6 +251,9 @@ void render(GSGLOBAL* gsGlobal, GSTEXTURE* Texture)
 int main(int argc, char *argv[])
 {
 	// Initialize vif packets
+	staticDataPacket = vifCreatePacket(3);
+	objectDataPacket = vifCreatePacket(20);
+
 	cube_packet =    vifCreatePacket(6);
 	vif_packets[0] = vifCreatePacket(6);
 	vif_packets[1] = vifCreatePacket(6);

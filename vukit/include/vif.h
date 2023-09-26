@@ -124,6 +124,34 @@ static inline void vifClearPacket(vifPacket *packet) {
 	memset(packet->base_ptr, 0, 16*packet->size);
 }
 
+int getbufferDepth(GSGLOBAL* gsGlobal);
+
+static inline void vifAddScreenSizeData(vifPacket* packet, GSGLOBAL* gsGlobal) {
+	*packet->cur_ptr.f++ = 2048.0f+gsGlobal->Width/2; // width
+	*packet->cur_ptr.f++ = 2048.0f+gsGlobal->Height/2; // height
+	*packet->cur_ptr.f++ = ((float)0xFFFFFF) / (float)getbufferDepth(gsGlobal); // depth
+}
+
+static inline void vifAddFloat(vifPacket* packet, float f) {
+	*packet->cur_ptr.f++ = f;
+}
+
+static inline void vifAddUInt(vifPacket* packet, uint32_t n) {
+	*packet->cur_ptr.dw++ = n;
+}
+
+static inline void vifAddGifTag(vifPacket* packet, uint64_t tag, uint64_t data) {
+	*packet->cur_ptr.qw++ = data;
+	*packet->cur_ptr.qw++ = tag;
+}
+
+static inline void vifAddColorData(vifPacket* packet, uint32_t r, uint32_t g, uint32_t b, uint32_t a) {
+	*packet->cur_ptr.dw++ = r;
+	*packet->cur_ptr.dw++ = g;
+	*packet->cur_ptr.dw++ = b;
+	*packet->cur_ptr.dw++ = a;
+}
+
 void vu1_upload_micro_program(u32* start, u32* end);
 
 void vu1_set_double_buffer_settings();
@@ -133,17 +161,5 @@ void vifSendPacket(vifPacket* packet, uint32_t vif_channel);
 vifPacket *vifCreatePacket(uint32_t size);
 
 void vifDestroyPacket(vifPacket* packet);
-
-int getbufferDepth(GSGLOBAL* gsGlobal);
-
-void vifAddScreenSizeData(vifPacket* packet, GSGLOBAL* gsGlobal);
-
-void vifAddFloat(vifPacket* packet, float f);
-
-void vifAddUInt(vifPacket* packet, uint32_t n);
-
-void vifAddGifTag(vifPacket* packet, uint64_t tag, uint64_t data);
-
-void vifAddColorData(vifPacket* packet, uint32_t r, uint32_t g, uint32_t b, uint32_t a);
 
 #endif

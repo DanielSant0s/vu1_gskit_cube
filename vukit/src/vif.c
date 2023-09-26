@@ -32,32 +32,6 @@ int getbufferDepth(GSGLOBAL* gsGlobal) {
 	}
 }
 
-void vifAddScreenSizeData(vifPacket* packet, GSGLOBAL* gsGlobal) {
-	*packet->cur_ptr.f++ = 2048.0f+gsGlobal->Width/2; // width
-	*packet->cur_ptr.f++ = 2048.0f+gsGlobal->Height/2; // height
-	*packet->cur_ptr.f++ = ((float)0xFFFFFF) / (float)getbufferDepth(gsGlobal); // depth
-}
-
-void vifAddFloat(vifPacket* packet, float f) {
-	*packet->cur_ptr.f++ = f;
-}
-
-void vifAddUInt(vifPacket* packet, uint32_t n) {
-	*packet->cur_ptr.dw++ = n;
-}
-
-void vifAddGifTag(vifPacket* packet, uint64_t tag, uint64_t data) {
-	*packet->cur_ptr.qw++ = data;
-	*packet->cur_ptr.qw++ = tag;
-}
-
-void vifAddColorData(vifPacket* packet, uint32_t r, uint32_t g, uint32_t b, uint32_t a) {
-	*packet->cur_ptr.dw++ = r;
-	*packet->cur_ptr.dw++ = g;
-	*packet->cur_ptr.dw++ = b;
-	*packet->cur_ptr.dw++ = a;
-}
-
 static inline u32 get_packet_size_for_program(u32 *start, u32 *end)
 {
     // Count instructions
