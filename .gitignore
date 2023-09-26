@@ -2,3 +2,6 @@
 cube.c
 *.o
 *.elf
+*.a
+*.a
+vukit/lib/libvukit.a

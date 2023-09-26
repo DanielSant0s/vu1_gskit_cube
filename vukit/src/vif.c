@@ -1,16 +1,20 @@
 #include "vif.h"
 
-void vifSendPacket(void* packet, u32 vif_channel) {
+void vifSendPacket(vifPacket* packet, uint32_t vif_channel) {
     dmaKit_wait(vif_channel, 0);
 	FlushCache(0);
-	dmaKit_send_chain(vif_channel, (void *)((u32)packet & 0x0FFFFFFF), 0);
+	dmaKit_send_chain(vif_channel, (void *)((u32)packet->base_ptr & 0x0FFFFFFF), 0);
 }
 
-void *vifCreatePacket(u32 size) {
-    return memalign(128, size*16);
+vifPacket *vifCreatePacket(uint32_t size) {
+	vifPacket* packet = memalign(128, sizeof(vifPacket));
+	packet->size = size;
+	packet->cur_ptr.p = packet->base_ptr = memalign(128, packet->size*16);
+    return packet;
 }
 
-void vifDestroyPacket(void* packet) {
+void vifDestroyPacket(vifPacket* packet) {
+	free(packet->base_ptr);
     free(packet);
 }
 
@@ -28,50 +32,30 @@ int getbufferDepth(GSGLOBAL* gsGlobal) {
 	}
 }
 
-void *vifAddScreenSizeData(void* packet, GSGLOBAL* gsGlobal) {
-	float* p_data = packet;
-
-	*p_data++ = 2048.0f+gsGlobal->Width/2; // width
-	*p_data++ = 2048.0f+gsGlobal->Height/2; // height
-	*p_data++ = ((float)0xFFFFFF) / (float)getbufferDepth(gsGlobal); // depth
-
-	return p_data;
+void vifAddScreenSizeData(vifPacket* packet, GSGLOBAL* gsGlobal) {
+	*packet->cur_ptr.f++ = 2048.0f+gsGlobal->Width/2; // width
+	*packet->cur_ptr.f++ = 2048.0f+gsGlobal->Height/2; // height
+	*packet->cur_ptr.f++ = ((float)0xFFFFFF) / (float)getbufferDepth(gsGlobal); // depth
 }
 
-void *vifAddFloat(void* packet, float f) {
-	float* p_data = packet;
-
-	*p_data++ = f;
-
-	return p_data;
+void vifAddFloat(vifPacket* packet, float f) {
+	*packet->cur_ptr.f++ = f;
 }
 
-void *vifAddUInt(void* packet, uint32_t n) {
-	uint32_t* p_data = packet;
-
-	*p_data++ = n;
-
-	return p_data;
+void vifAddUInt(vifPacket* packet, uint32_t n) {
+	*packet->cur_ptr.dw++ = n;
 }
 
-void *vifAddGifTag(void* packet, uint64_t tag, uint64_t data) {
-	u64* p_data = packet;
-
-	*p_data++ = data;
-	*p_data++ = tag;
-
-	return p_data;
+void vifAddGifTag(vifPacket* packet, uint64_t tag, uint64_t data) {
+	*packet->cur_ptr.qw++ = data;
+	*packet->cur_ptr.qw++ = tag;
 }
 
-void *vifAddColorData(void* packet, uint32_t r, uint32_t g, uint32_t b, uint32_t a) {
-	uint32_t* p_data = packet;
-
-	*p_data++ = r;
-	*p_data++ = g;
-	*p_data++ = b;
-	*p_data++ = a;
-
-	return p_data;
+void vifAddColorData(vifPacket* packet, uint32_t r, uint32_t g, uint32_t b, uint32_t a) {
+	*packet->cur_ptr.dw++ = r;
+	*packet->cur_ptr.dw++ = g;
+	*packet->cur_ptr.dw++ = b;
+	*packet->cur_ptr.dw++ = a;
 }
 
 static inline u32 get_packet_size_for_program(u32 *start, u32 *end)
@@ -86,8 +70,7 @@ static inline u32 get_packet_size_for_program(u32 *start, u32 *end)
 void vu1_upload_micro_program(u32* start, u32* end)
 {
 	u32 packet_size = get_packet_size_for_program(start, end) + 1; // + 1 for end tag
-	u64* p_store;
-	u64* p_data = p_store = vifCreatePacket(packet_size);
+	vifPacket* packet = vifCreatePacket(packet_size);
 
 	// get the size of the code as we can only send 256 instructions in each MPGtag
 	u32 dest = 0;
@@ -101,34 +84,35 @@ void vu1_upload_micro_program(u32* start, u32* end)
     {
         u16 curr_count = count > 256 ? 256 : count;
 
-		*p_data++ = DMA_TAG(curr_count / 2, 0, DMA_REF, 0, (const u128 *)l_start, 0);
-
-		*p_data++ = (VIF_CODE(0, 0, VIF_NOP, 0) | (u64)VIF_CODE(dest, curr_count & 0xFF, VIF_MPG, 0) << 32);
+		*packet->cur_ptr.qw++ = DMA_TAG(curr_count / 2, 0, DMA_REF, 0, (const u128 *)l_start, 0);
+		*packet->cur_ptr.dw++ = VIF_CODE(0, 0, VIF_NOP, 0);
+		*packet->cur_ptr.dw++ = VIF_CODE(dest, curr_count & 0xFF, VIF_MPG, 0);
 
         l_start += curr_count * 2;
         count -= curr_count;
         dest += curr_count;
     }
 
-	*p_data++ = DMA_TAG(0, 0, DMA_END, 0, 0 , 0);
-	*p_data++ = (VIF_CODE(0, 0, VIF_NOP, 0) | (u64)VIF_CODE(0, 0, VIF_NOP, 0) << 32);
+	*packet->cur_ptr.qw++ = DMA_TAG(0, 0, DMA_END, 0, 0, 0);
+	*packet->cur_ptr.dw++ = VIF_CODE(0, 0, VIF_NOP, 0);
+	*packet->cur_ptr.dw++ = VIF_CODE(0, 0, VIF_NOP, 0);
 
-    vifSendPacket(p_store, 1);
-	vifDestroyPacket(p_store);
+    vifSendPacket(packet, 1);
+	vifDestroyPacket(packet);
 }
 
 void vu1_set_double_buffer_settings()
 {
-	u64* p_data;
-	u64* p_store;
-	p_data = p_store = vifCreatePacket(2);
+	vifPacket* packet = vifCreatePacket(2);
 
-	*p_data++ = DMA_TAG(0, 0, DMA_CNT, 0, 0 , 0);
-	*p_data++ = (VIF_CODE(8, 0, VIF_BASE, 0) | (u64)VIF_CODE(496, 0, VIF_OFFSET, 0) << 32);
+	*packet->cur_ptr.qw++ = DMA_TAG(0, 0, DMA_CNT, 0, 0 , 0);
+	*packet->cur_ptr.dw++ = VIF_CODE(8, 0, VIF_BASE, 0);
+	*packet->cur_ptr.dw++ = VIF_CODE(496, 0, VIF_OFFSET, 0);
 
-	*p_data++ = DMA_TAG(0, 0, DMA_END, 0, 0 , 0);
-	*p_data++ = (VIF_CODE(0, 0, VIF_NOP, 0) | (u64)VIF_CODE(0, 0, VIF_NOP, 0) << 32);
+	*packet->cur_ptr.qw++ = DMA_TAG(0, 0, DMA_END, 0, 0 , 0);
+	*packet->cur_ptr.dw++ = VIF_CODE(0, 0, VIF_NOP, 0);
+	*packet->cur_ptr.dw++ = VIF_CODE(0, 0, VIF_NOP, 0);
 
-    vifSendPacket(p_store, 1);
-	vifDestroyPacket(p_store);
+    vifSendPacket(packet, 1);
+	vifDestroyPacket(packet);
 }

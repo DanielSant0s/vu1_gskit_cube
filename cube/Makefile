@@ -16,7 +16,7 @@ EE_VCL = vcl
 EE_VCLPP = vclpp
 
 all: cube.c $(EE_BIN)
-	$(EE_STRIP) --strip-all $(EE_BIN)
+#	$(EE_STRIP) --strip-all $(EE_BIN)
 
 # Original VCL tool preferred. 
 # It can be runned on WSL, but with some tricky commands: 

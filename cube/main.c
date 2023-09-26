@@ -30,11 +30,11 @@ VECTOR camera_rotation = { 0.00f, 0.00f,   0.00f, 1.00f };
 
 MATRIX local_world, world_view, view_screen, local_screen;
 
-u64* vif_packets[2] __attribute__((aligned(64)));
-u64* curr_vif_packet;
+vifPacket *vif_packets[2] __attribute__((aligned(64)));
+vifPacket *curr_vif_packet;
 
 /** Cube data */
-u64 *cube_packet;
+vifPacket *cube_packet;
 
 u8 context = 0;
 
@@ -62,30 +62,29 @@ static inline void gsKit_set_tw_th(const GSTEXTURE *Texture, int *tw, int *th)
 void calculate_cube(GSGLOBAL* gsGlobal, GSTEXTURE* Texture)
 {
 	u64 tmp;
-	u64* p_data = cube_packet;
 
-	p_data = vifAddScreenSizeData(p_data, gsGlobal);
-	p_data = vifAddUInt(p_data, faces_count);
+	vifAddScreenSizeData(cube_packet, gsGlobal);
+	vifAddUInt(cube_packet, faces_count);
 
 	tmp = GIF_TAG(1, 0, 0, 0, 0, 1);
-	p_data = vifAddGifTag(p_data, GIF_AD, tmp);
-	p_data = vifAddGifTag(p_data, GS_TEX1_1, GS_SETREG_TEX1(1, 0, 0, 0, 0, 0, 0));
+	vifAddGifTag(cube_packet, GIF_AD, tmp);
+	vifAddGifTag(cube_packet, GS_TEX1_1, GS_SETREG_TEX1(1, 0, 0, 0, 0, 0, 0));
 
 	int tw, th;
 	gsKit_set_tw_th(Texture, &tw, &th);
 
-	p_data = vifAddGifTag(p_data, GS_TEX0_1, GS_SETREG_TEX0(
+	vifAddGifTag(cube_packet, GS_TEX0_1, GS_SETREG_TEX0(
             Texture->Vram/256, Texture->TBW, Texture->PSM,
             tw, th, gsGlobal->PrimAlphaEnable, 0,
     		0, 0, 0, 0, GS_CLUT_STOREMODE_NOLOAD));
 
-	p_data = vifAddGifTag(p_data, DRAW_STQ2_REGLIST, VU_GS_GIFTAG(
+	vifAddGifTag(cube_packet, DRAW_STQ2_REGLIST, VU_GS_GIFTAG(
 			faces_count, 1, 1,
     		VU_GS_PRIM(GS_PRIM_PRIM_TRIANGLE, 1, 1, gsGlobal->PrimFogEnable, 
 			0, gsGlobal->PrimAAEnable, 0, 0, 0),
         	0, 3));
 
-	p_data = vifAddColorData(p_data, 128, 128, 128, 128);
+	vifAddColorData(cube_packet, 128, 128, 128, 128);
 }
 
 /** Calculate cube position and add packet with cube data */
@@ -96,32 +95,30 @@ void draw_cube()
 	create_local_screen(local_screen, local_world, world_view, view_screen);
 	curr_vif_packet = vif_packets[context];
 
-	memset(curr_vif_packet, 0, 16*6);
+	vifResetPacket(curr_vif_packet);
 	
 	// Add matrix at the beggining of VU mem (skip TOP)
-	curr_vif_packet = vu_add_unpack_data(curr_vif_packet, 0, &local_screen, 8, 0);
+	vifAddUnpackData(curr_vif_packet, 0, &local_screen, 8, 0);
 
 	u32 vif_added_bytes = 0; // zero because now we will use TOP register (double buffer)
 							 // we don't wan't to unpack at 8 + beggining of buffer, but at
 							 // the beggining of the buffer
 
 	// Merge packets
-	curr_vif_packet = vu_add_unpack_data(curr_vif_packet, vif_added_bytes, cube_packet, 6, 1);
+	vifAddUnpackData(curr_vif_packet, vif_added_bytes, cube_packet->base_ptr, 6, 1);
 	vif_added_bytes += 6;
 
 	// Add vertices
-	curr_vif_packet = vu_add_unpack_data(curr_vif_packet, vif_added_bytes, c_verts, faces_count, 1);
+	vifAddUnpackData(curr_vif_packet, vif_added_bytes, c_verts, faces_count, 1);
 	vif_added_bytes += faces_count; // one VECTOR is size of qword
 
 	// Add sts
-	curr_vif_packet = vu_add_unpack_data(curr_vif_packet, vif_added_bytes, c_sts, faces_count, 1);
+	vifAddUnpackData(curr_vif_packet, vif_added_bytes, c_sts, faces_count, 1);
 	vif_added_bytes += faces_count;
 
-	*curr_vif_packet++ = DMA_TAG(0, 0, DMA_CNT, 0, 0, 0);
-	*curr_vif_packet++ = ((VIF_CODE(0, 0, VIF_FLUSH, 0) | (u64)VIF_CODE(0, 0, VIF_MSCAL, 0) << 32));
+	vifStartProgram(curr_vif_packet);
 
-	*curr_vif_packet++ = DMA_TAG(0, 0, DMA_END, 0, 0 , 0);
-	*curr_vif_packet++ = (VIF_CODE(0, 0, VIF_NOP, 0) | (u64)VIF_CODE(0, 0, VIF_NOP, 0) << 32);
+	vifAddEndTag(curr_vif_packet);
 
 	vifSendPacket(vif_packets[context], 1);
 
@@ -215,7 +212,7 @@ void render(GSGLOBAL* gsGlobal, GSTEXTURE* Texture)
 int main(int argc, char *argv[])
 {
 	// Initialize vif packets
-	cube_packet =    vifCreatePacket(6);
+	cube_packet = vifCreatePacket(6);
 	vif_packets[0] = vifCreatePacket(6);
 	vif_packets[1] = vifCreatePacket(6);
 

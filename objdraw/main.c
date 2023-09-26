@@ -19,6 +19,8 @@
 
 #include "mesh_data.c"
 
+#include "programs/dynpip_vu1_shared_defines.h"
+
 vifRegisterProgram(DynPipVU1_C);
 vifRegisterProgram(DynPipVU1_D);
 vifRegisterProgram(DynPipVU1_TC);
@@ -88,6 +90,59 @@ void calculate_cube(GSGLOBAL* gsGlobal, GSTEXTURE* Texture)
 
 	p_data = vifAddColorData(p_data, 128, 128, 128, 128);
 }
+
+void addObjectData(DynPipBag* bag, M4x4* mvp, RendererCoreTextureBuffers* texBuffers) {
+	u64* p_data = objectDataPacket;
+
+  	memset(p_data, 0, 16*20); // packet2_reset(p_data, false);
+
+  	p_data = vifAddUnpackData(p_data, VU1_MVP_MATRIX_ADDR, mvp->data, 4, false);
+
+  	if (0/*bag->lighting*/) {
+  	  // p_data = vifAddUnpackData(p_data, VU1_LIGHTS_MATRIX_ADDR, bag->lighting->lightMatrix, 3, false);
+
+  	  // p_data = vifAddUnpackData(p_data, VU1_LIGHTS_DIRS_ADDR, bag->lighting->dirLights->getLightDirections(), 3, false);
+
+  	  // p_data = vifAddUnpackData(p_data, VU1_LIGHTS_COLORS_ADDR, bag->lighting->dirLights->getLightColors(), 4, false);
+  	}
+
+  	u8 singleColorEnabled = false;
+
+  	if (singleColorEnabled)  // Color is placed in 4th slot of VU1_LIGHTS_MATRIX_ADDR
+  		p_data = vifAddUnpackData(p_data, VU1_SINGLE_COLOR_ADDR, 0, 1, false);
+
+  	p_data = vifOpenUnpack(p_data, VU1_OPTIONS_ADDR, false);
+  	{
+  	  	p_data = vifAddUInt(p_data, singleColorEnabled);  // Single color enabled.
+  	  	p_data = packet2_add_float(p_data, bag->interpolation);  // Interpolation value
+  	  	p_data = vifAddUInt(p_data, 0);   // not used, padding
+  	  	p_data = vifAddUInt(p_data, 0);   // not used, padding
+
+  	  	p_data = vifAddGifTag(p_data, GS_TEX1_1, GS_SETREG_TEX1(1, 0, 0, 0, 0, 0, 0));
+
+  	  	if (bag->info->zTestType == PipelineZTest_AllPass) {
+  	  	  	packet2_add_2x_s64(p_data, GS_SET_TEST(0, 0, 0, 0, 0, 0, 0, ZTEST_METHOD_ALLPASS), GS_REG_TEST);
+  	  	} else {
+  	  	  	packet2_add_2x_s64( p_data,
+  	  	  	    GS_SET_TEST(DRAW_ENABLE, ATEST_METHOD_NOTEQUAL, 0x00,
+  	  	  	                ATEST_KEEP_FRAMEBUFFER, DRAW_DISABLE, DRAW_DISABLE,
+  	  	  	                DRAW_ENABLE, rendererCore->gs.zBuffer.method),
+  	  	  	    GS_REG_TEST);
+  	  	}
+
+  	  	if (texBuffers != nullptr) {
+  	  	  	rendererCore->texture.updateClutBuffer(texBuffers->clut);
+
+  	  	  	packet2_utils_gs_add_texbuff_clut(p_data, texBuffers->core, &rendererCore->texture.clut);
+  	  	}
+  	}
+  	p_data = vifCloseUnpack(p_data);
+
+  	p_data = vifAddEndTag(p_data);
+	
+  	vifSendPacket(p_data, 1);
+}
+
 /*
 
 void draw_cube()
@@ -100,22 +155,22 @@ void draw_cube()
 	memset(curr_vif_packet, 0, 16*6);
 	
 	// Add matrix at the beggining of VU mem (skip TOP)
-	curr_vif_packet = vu_add_unpack_data(curr_vif_packet, 0, &local_screen, 8, 0);
+	curr_vif_packet = vifAddUnpackData(curr_vif_packet, 0, &local_screen, 8, 0);
 
 	u32 vif_added_bytes = 0; // zero because now we will use TOP register (double buffer)
 							 // we don't wan't to unpack at 8 + beggining of buffer, but at
 							 // the beggining of the buffer
 
 	// Merge packets
-	curr_vif_packet = vu_add_unpack_data(curr_vif_packet, vif_added_bytes, cube_packet, 6, 1);
+	curr_vif_packet = vifAddUnpackData(curr_vif_packet, vif_added_bytes, cube_packet, 6, 1);
 	vif_added_bytes += 6;
 
 	// Add vertices
-	curr_vif_packet = vu_add_unpack_data(curr_vif_packet, vif_added_bytes, c_verts, faces_count, 1);
+	curr_vif_packet = vifAddUnpackData(curr_vif_packet, vif_added_bytes, c_verts, faces_count, 1);
 	vif_added_bytes += faces_count; // one VECTOR is size of qword
 
 	// Add sts
-	curr_vif_packet = vu_add_unpack_data(curr_vif_packet, vif_added_bytes, c_colours, faces_count, 1);
+	curr_vif_packet = vifAddUnpackData(curr_vif_packet, vif_added_bytes, c_colours, faces_count, 1);
 	vif_added_bytes += faces_count;
 
 	*curr_vif_packet++ = DMA_TAG(0, 0, DMA_CNT, 0, 0, 0);

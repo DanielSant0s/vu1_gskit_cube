@@ -3,6 +3,7 @@
         "stdio.h": "c",
         "malloc.h": "c",
         "vif.h": "c",
-        "time.h": "c"
+        "time.h": "c",
+        "dynpip_vu1_shared_defines.h": "c"
     }
 }
