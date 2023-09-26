@@ -92,7 +92,21 @@ void calculate_cube(GSGLOBAL* gsGlobal, GSTEXTURE* Texture)
 	vifAddColorData(cube_packet, 128, 128, 128, 128);
 }
 
-void addObjectData(/*DynPipBag* bag, RendererCoreTextureBuffers* texBuffers*/) {
+void sendStaticData() {
+  vifResetPacket(staticDataPacket);
+  vifOpenUnpack(staticDataPacket, VU1_SET_GIFTAG_ADDR, false);
+  { 
+	u64 tmp = GIF_TAG(1, 0, 0, 0, 0, 1);
+	vifAddGifTag(cube_packet, GIF_AD, tmp);
+  }
+  vifCloseUnpack(staticDataPacket);
+
+  vifAddEndTag(staticDataPacket);
+
+  vifSendPacket(objectDataPacket, 1);
+}
+
+void sendObjectData(/*DynPipBag* bag, RendererCoreTextureBuffers* texBuffers*/) {
   	vifResetPacket(objectDataPacket);
 
   	vifAddUnpackData(objectDataPacket, VU1_MVP_MATRIX_ADDR, &local_screen, 4, false);
