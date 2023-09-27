@@ -7,9 +7,9 @@ void vifSendPacket(vifPacket* packet, uint32_t vif_channel) {
 }
 
 vifPacket *vifCreatePacket(uint32_t size) {
-	vifPacket* packet = memalign(128, sizeof(vifPacket));
+	vifPacket* packet = memalign(64, sizeof(vifPacket));
 	packet->size = size;
-	packet->cur_ptr.p = packet->base_ptr = memalign(128, packet->size*16);
+	packet->cur_ptr.p = packet->base_ptr = memalign(64, packet->size*16);
     return packet;
 }
 

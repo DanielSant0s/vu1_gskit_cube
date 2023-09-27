@@ -92,13 +92,29 @@ void calculate_cube(GSGLOBAL* gsGlobal, GSTEXTURE* Texture)
 	vifAddColorData(cube_packet, 128, 128, 128, 128);
 }
 
+void addStandardBufferDataToPacket(vifPacket* packet, GSGLOBAL* gsGlobal) {
+  vifOpenUnpack(packet, 0, true);
+  {
+	uint32_t vertex_count = 0; // placeholder
+	vifAddScreenSizeData(packet, gsGlobal);
+    vifAddUInt(packet, vertex_count);  // vertex count
+
+	vifAddGifTag(packet, DRAW_STQ2_REGLIST, VU_GS_GIFTAG(
+			vertex_count, 1, 1,
+    		VU_GS_PRIM(GS_PRIM_PRIM_TRIANGLE, 1, 1, gsGlobal->PrimFogEnable, 
+			0, gsGlobal->PrimAAEnable, 0, 0, 0),
+        	0, 3));
+  }
+  vifCloseUnpack(packet);
+}
+
 void sendStaticData() {
   vifResetPacket(staticDataPacket);
   vifOpenUnpack(staticDataPacket, VU1_SET_GIFTAG_ADDR, false);
   { 
 	u64 tmp = GIF_TAG(1, 0, 0, 0, 0, 1);
 	vifAddGifTag(cube_packet, GIF_AD, tmp);
-  }
+  } 
   vifCloseUnpack(staticDataPacket);
 
   vifAddEndTag(staticDataPacket);
